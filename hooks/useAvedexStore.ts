@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Sighting, Excursion } from '../types';
 import { MOCK_BIRDS } from '../constants/mockBirds';
+import { supabase } from '../lib/supabase';
 
 interface AvedexState {
   unlockedSpeciesIds: string[];
@@ -12,7 +13,9 @@ interface AvedexState {
   excursions: Excursion[];
   alertsEnabled: boolean;
   language: string;
-  addSighting: (sighting: Sighting) => void;
+  fetchUserSightings: (userId: string) => Promise<void>;
+  resetSightings: () => void;
+  addSighting: (sighting: Sighting) => Promise<void>;
   clearAllSightings: () => void;
   getSightingBySpeciesId: (speciesId: string) => Sighting[];
   getCompletionPercentage: () => number;
@@ -35,16 +38,106 @@ export const useAvedexStore = create<AvedexState>()(
       excursions: [],
       alertsEnabled: false,
       language: 'es',
-      addSighting: (sighting: Sighting) => {
+      fetchUserSightings: async (userId: string) => {
+        if (!userId) return;
+        try {
+          const { data, error } = await supabase
+            .from('user_sightings')
+            .select('*')
+            .eq('user_id', userId);
+
+          if (error) {
+            console.warn('Error fetching user sightings from Supabase:', error.message);
+            return;
+          }
+
+          if (data) {
+            const fetchedSightings: Sighting[] = data.map((row: any) => ({
+              id: row.id,
+              speciesId: row.species_id || row.speciesId || '',
+              commonName: row.common_name || row.commonName,
+              scientificName: row.scientific_name || row.scientificName,
+              userPhotoUri: row.user_photo_uri || row.userPhotoUri,
+              defaultPhotoUrl: row.default_photo_url || row.defaultPhotoUrl,
+              audioUrl: row.audio_url || row.audioUrl,
+              description: row.description,
+              habitat: row.habitat,
+              rarity: row.rarity,
+              conservationStatus: row.conservation_status || row.conservationStatus,
+              timestamp: row.timestamp,
+              coordinates: typeof row.coordinates === 'string' ? JSON.parse(row.coordinates) : row.coordinates,
+              userId: row.user_id || row.userId,
+              date: row.date,
+              photoUrl: row.photo_url || row.photoUrl,
+              notes: row.notes,
+            }));
+
+            const unlockedSpeciesIds = Array.from(
+              new Set(fetchedSightings.map((s) => s.speciesId).filter(Boolean))
+            );
+
+            set({
+              userSightings: fetchedSightings,
+              unlockedSpeciesIds,
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to fetch user sightings:', err);
+        }
+      },
+      resetSightings: () => {
+        set({ userSightings: [], unlockedSpeciesIds: [] });
+      },
+      addSighting: async (sighting: Sighting) => {
         set((state) => {
           const isNewSpecies = !state.unlockedSpeciesIds.includes(sighting.speciesId);
           return {
             userSightings: [...state.userSightings, sighting],
-            unlockedSpeciesIds: isNewSpecies 
+            unlockedSpeciesIds: isNewSpecies
               ? [...state.unlockedSpeciesIds, sighting.speciesId]
               : state.unlockedSpeciesIds,
           };
         });
+
+        try {
+          let targetUserId = sighting.userId;
+          if (!targetUserId) {
+            const { data: { session } } = await supabase.auth.getSession();
+            targetUserId = session?.user?.id;
+          }
+
+          if (targetUserId) {
+            const payload = {
+              id: sighting.id,
+              user_id: targetUserId,
+              species_id: sighting.speciesId,
+              common_name: sighting.commonName,
+              scientific_name: sighting.scientificName,
+              user_photo_uri: sighting.userPhotoUri,
+              default_photo_url: sighting.defaultPhotoUrl,
+              audio_url: sighting.audioUrl,
+              description: sighting.description,
+              habitat: sighting.habitat,
+              rarity: sighting.rarity,
+              conservation_status: sighting.conservationStatus,
+              timestamp: sighting.timestamp || new Date().toISOString(),
+              coordinates: sighting.coordinates,
+              date: sighting.date,
+              photo_url: sighting.photoUrl,
+              notes: sighting.notes,
+            };
+
+            const { error } = await supabase
+              .from('user_sightings')
+              .insert([payload]);
+
+            if (error) {
+              console.warn('Error syncing sighting to Supabase:', error.message);
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to insert sighting into Supabase:', err);
+        }
       },
       clearAllSightings: () => {
         set({ userSightings: [], unlockedSpeciesIds: [] });

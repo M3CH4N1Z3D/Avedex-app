@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
@@ -20,11 +21,15 @@ import {
   Database,
   ChevronRight,
   Download,
-  ShieldCheck,
 } from 'lucide-react-native';
 import { useAvedexStore } from '../hooks/useAvedexStore';
 import { scheduleMigratoryAlert } from '../services/notificationService';
 import { exportToEBird, exportBackup } from '../services/exportService';
+import { authenticateWithBiometrics, isBiometricSupported } from '../utils/biometrics';
+import { supabase } from '../lib/supabase';
+
+const BIOMETRICS_KEY = '@avedex_biometrics_enabled';
+const BIOMETRICS_SESSION_KEY = '@avedex_biometrics_session';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -50,6 +55,20 @@ export default function SettingsScreen() {
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  useEffect(() => {
+    const loadBiometricsPreference = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(BIOMETRICS_KEY);
+        if (stored !== null) {
+          setBiometricsEnabled(stored === 'true');
+        }
+      } catch (err) {
+        console.error('Error loading biometrics preference:', err);
+      }
+    };
+    loadBiometricsPreference();
+  }, []);
+
   const handleToggleAlerts = async (value: boolean) => {
     setAlertsEnabled(value);
     if (value) {
@@ -72,11 +91,52 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleToggleBiometrics = (value: boolean) => {
-    setBiometricsEnabled(value);
+  const handleToggleBiometrics = async (value: boolean) => {
+    if (Platform.OS === 'web') return;
+
     if (value) {
-      Alert.alert('Biometría Activada', 'Se ha habilitado la autenticación biométrica (Huella / Face ID).');
+      const supported = await isBiometricSupported();
+      if (!supported) {
+        Alert.alert(
+          'Biometría no disponible',
+          'Tu dispositivo no cuenta con hardware biométrico o no tienes biometría configurada.'
+        );
+        return;
+      }
+
+      const authResult = await authenticateWithBiometrics(
+        'Confirma tu identidad para activar la biometría'
+      );
+
+      if (authResult.success) {
+        setBiometricsEnabled(true);
+        await AsyncStorage.setItem(BIOMETRICS_KEY, 'true');
+
+        // Store active session credentials if available
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await AsyncStorage.setItem(
+            BIOMETRICS_SESSION_KEY,
+            JSON.stringify({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            })
+          );
+        }
+
+        Alert.alert(
+          'Biometría Activada',
+          'Se ha habilitado la autenticación biométrica (Huella / Face ID).'
+        );
+      } else {
+        if (authResult.error) {
+          Alert.alert('Autenticación Fallida', authResult.error);
+        }
+      }
     } else {
+      setBiometricsEnabled(false);
+      await AsyncStorage.setItem(BIOMETRICS_KEY, 'false');
+      await AsyncStorage.removeItem(BIOMETRICS_SESSION_KEY);
       Alert.alert('Biometría Desactivada', 'Autenticación biométrica desactivada.');
     }
   };
@@ -176,10 +236,16 @@ export default function SettingsScreen() {
                   <Text className="text-slate-500 text-xs mt-0.5">
                     Utiliza Face ID o huella dactilar para acceder a la app rápidamente.
                   </Text>
+                  {Platform.OS === 'web' && (
+                    <Text className="text-amber-600 text-xs font-medium mt-1">
+                      Disponible solo en dispositivos móviles
+                    </Text>
+                  )}
                 </View>
               </View>
               <Switch
-                value={biometricsEnabled}
+                disabled={Platform.OS === 'web'}
+                value={Platform.OS === 'web' ? false : biometricsEnabled}
                 onValueChange={handleToggleBiometrics}
                 trackColor={{ false: '#cbd5e1', true: '#10b981' }}
                 thumbColor="#ffffff"

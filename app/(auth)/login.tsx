@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,15 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { Fingerprint } from 'lucide-react-native';
 import { useAuth } from '../../context/AuthContext';
+import { authenticateWithBiometrics, isBiometricSupported } from '../../utils/biometrics';
+import { supabase } from '../../lib/supabase';
+
+const BIOMETRICS_KEY = '@avedex_biometrics_enabled';
+const BIOMETRICS_SESSION_KEY = '@avedex_biometrics_session';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -21,6 +28,25 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+
+  useEffect(() => {
+    checkBiometrics();
+  }, []);
+
+  const checkBiometrics = async () => {
+    if (Platform.OS === 'web') {
+      setBiometricsAvailable(false);
+      return;
+    }
+    try {
+      const supported = await isBiometricSupported();
+      const enabled = await AsyncStorage.getItem(BIOMETRICS_KEY);
+      setBiometricsAvailable(supported && enabled === 'true');
+    } catch {
+      setBiometricsAvailable(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -34,7 +60,9 @@ export default function LoginScreen() {
       const { error } = await signInWithEmail(email.trim(), password);
       if (error) {
         if (error.message?.toLowerCase().includes('email not confirmed')) {
-          setErrorMsg('Tu correo electrónico aún no ha sido confirmado. Por favor revisa tu bandeja de entrada y confirma tu cuenta antes de iniciar sesión.');
+          setErrorMsg(
+            'Tu correo electrónico aún no ha sido confirmado. Por favor revisa tu bandeja de entrada y confirma tu cuenta antes de iniciar sesión.'
+          );
         } else {
           setErrorMsg(error.message || 'Error al iniciar sesión. Verifica tus credenciales.');
         }
@@ -43,6 +71,59 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Ocurrió un error inesperado.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setErrorMsg('');
+    setLoading(true);
+
+    try {
+      const res = await authenticateWithBiometrics('Inicia sesión en Avedex');
+      if (res.success) {
+        let {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) {
+          const storedSessionStr = await AsyncStorage.getItem(BIOMETRICS_SESSION_KEY);
+          if (storedSessionStr) {
+            try {
+              const { access_token, refresh_token } = JSON.parse(storedSessionStr);
+              if (access_token && refresh_token) {
+                const restored = await supabase.auth.setSession({
+                  access_token,
+                  refresh_token,
+                });
+                session = restored.data.session;
+              }
+            } catch {
+              // Ignore parse or setSession errors
+            }
+          }
+        }
+
+        if (!session) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          session = refreshed.session;
+        }
+
+        if (session) {
+          router.replace('/(tabs)');
+        } else {
+          setErrorMsg(
+            'No hay una sesión guardada válida. Por favor, inicia sesión con tu correo y contraseña.'
+          );
+        }
+      } else {
+        if (res.error) {
+          setErrorMsg(res.error);
+        }
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error durante la autenticación biométrica.');
     } finally {
       setLoading(false);
     }
@@ -108,7 +189,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={handleLogin}
               disabled={loading}
-              className="bg-emerald-600 py-4 rounded-xl items-center justify-center shadow-md active:opacity-90 mb-6"
+              className="bg-emerald-600 py-4 rounded-xl items-center justify-center shadow-md active:opacity-90 mb-4"
             >
               {loading ? (
                 <ActivityIndicator color="#ffffff" />
@@ -118,6 +199,19 @@ export default function LoginScreen() {
                 </Text>
               )}
             </TouchableOpacity>
+
+            {biometricsAvailable && (
+              <TouchableOpacity
+                onPress={handleBiometricLogin}
+                disabled={loading}
+                className="flex-row items-center justify-center bg-indigo-50 border border-indigo-200 py-3.5 px-4 rounded-xl mb-6 active:opacity-80"
+              >
+                <Fingerprint size={20} color="#4f46e5" />
+                <Text className="text-indigo-700 font-semibold text-sm ml-2">
+                  Iniciar sesión con Biometría / Huella
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <View className="flex-row justify-center items-center">
               <Text className="text-slate-600 text-sm">

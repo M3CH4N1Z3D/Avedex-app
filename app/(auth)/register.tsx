@@ -36,12 +36,32 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      const { error } = await signUpWithEmail(email.trim(), password, fullName.trim());
+      const { data, error } = await signUpWithEmail(email.trim(), password, fullName.trim());
       if (error) {
         setErrorMsg(error.message || 'Error al registrar la cuenta.');
-      } else {
-        setShowConfirmationModal(true);
+        return;
       }
+
+      // Si Supabase devuelve sesión activa (confirmación de email desactivada)
+      if (data?.session) {
+        router.replace('/(tabs)');
+        return;
+      }
+
+      // Si el usuario ya existe (identities vacías con protección de enumeración activa)
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setErrorMsg('Este correo ya está registrado. Por favor inicia sesión.');
+        return;
+      }
+
+      // Si el usuario ya fue confirmado pero no devolvió sesión de inmediato
+      if (data?.user?.email_confirmed_at || (data?.user as any)?.confirmed_at) {
+        router.replace('/(auth)/login' as any);
+        return;
+      }
+
+      // Si aún requiere confirmación por correo electrónico
+      setShowConfirmationModal(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Ocurrió un error inesperado.');
     } finally {

@@ -1,0 +1,48 @@
+# Vercel deployment ignore file
+
+# Dependencies (installed remotely by Vercel)
+node_modules/
+
+# Native app directories & build files
+android/
+ios/
+build/
+*.apk
+*.aab
+*.ipa
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.kotlin/
+
+# Expo / build output directories
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# Git
+.git/
+.github/
+
+# Documents & heavy design files
+*.pdf
+Plan_login.pdf
+
+# Environment variables
+.env*.local
+.env
+
+# Editor & tooling configs
+.vscode/
+.claude/
+.idea/
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log

@@ -6,7 +6,12 @@
 [![NativeWind](https://img.shields.io/badge/NativeWind-v4.2.6-38BDF8.svg?logo=tailwindcss&logoColor=white)](https://www.nativewind.dev)
 [![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-3ECF8E.svg?logo=supabase&logoColor=white)](https://supabase.com)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4.svg?logo=google&logoColor=white)](https://ai.google.dev)
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Web%20Live-000000.svg?logo=vercel&logoColor=white)](https://avedex-eight.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](Avedex/LICENSE)
+
+> ### 🌐 Versión Web en Vivo
+> Explora y prueba la aplicación web desplegada en producción directamente desde cualquier navegador:
+> 🔗 **[https://avedex-eight.vercel.app](https://avedex-eight.vercel.app)**
 
 ---
 
@@ -206,6 +211,96 @@ npx expo start
 
 ---
 
-## 📄 8. Licencia
+## 📱 8. Generación e Instalación de APK para Android
+
+Si deseas compilar, instalar y probar Avedex en un dispositivo Android de forma independiente (sin depender de Expo Go), dispones de dos alternativas para generar el archivo APK:
+
+### ⚙️ Opción 1: Compilación local con Gradle / React Native CLI
+
+Esta opción requiere contar con el entorno local de desarrollo Android configurado ([Android Studio](https://developer.android.com/studio), Android SDK, variable `ANDROID_HOME` y JDK).
+
+1. **Precompilar el proyecto nativo (si aún no se ha generado la carpeta `android/`):**
+   ```bash
+   npx expo prebuild --platform android
+   ```
+
+2. **Compilar el archivo APK Release usando Gradle:**
+   ```bash
+   cd android
+   ./gradlew assembleRelease
+   ```
+   *(Para una versión de depuración rápida puedes usar: `./gradlew assembleDebug`)*
+
+   Alternativamente, puedes compilarlo directamente a través de Expo CLI:
+   ```bash
+   npx expo run:android --variant release
+   ```
+
+3. **Ubicación del archivo APK resultante:**
+   - **APK Release:** `android/app/build/outputs/apk/release/app-release.apk`
+   - **APK Debug:** `android/app/build/outputs/apk/debug/app-debug.apk`
+
+---
+
+### ☁️ Opción 2: Compilación en la nube con EAS Build (Recomendada)
+
+Con **EAS Build (Expo Application Services)** puedes compilar el APK directamente en la infraestructura en la nube de Expo sin necesidad de instalar Android Studio ni configurar SDKs locales:
+
+1. **Instalar EAS CLI globalmente:**
+   ```bash
+   npm install -g eas-cli
+   ```
+
+2. **Iniciar sesión en tu cuenta de Expo:**
+   ```bash
+   eas login
+   ```
+
+3. **Configurar el perfil de compilación de APK en `eas.json`:**
+   Asegúrate de contar con un perfil configurado con `"buildType": "apk"` (por ejemplo en el perfil `preview`):
+   ```json
+   {
+     "build": {
+       "preview": {
+         "android": {
+           "buildType": "apk"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Ejecutar la compilación en la nube:**
+   ```bash
+   eas build -p android --profile preview
+   ```
+   Al finalizar el proceso, la consola te proporcionará un enlace directo de descarga y un código QR para bajar el archivo `.apk` listo para instalar, sin requerir publicación en Google Play Store.
+
+---
+
+### 📲 Instrucciones de Instalación en el Dispositivo Android
+
+Una vez que tengas el archivo `.apk` (ya sea por compilación local o descarga desde EAS Build):
+
+1. **Habilitar la instalación de apps de orígenes desconocidos:**
+   - En tu teléfono Android, ve a **Ajustes / Configuración** > **Seguridad y Privacidad** (o **Aplicaciones y Notificaciones**).
+   - Accede a **Instalar aplicaciones desconocidas** o **Fuentes desconocidas**.
+   - Habilita el permiso para la aplicación que utilizarás para gestionar o abrir el archivo (por ejemplo, Google Chrome, el Administrador de Archivos / *Files*, o Google Drive).
+
+2. **Transferir el archivo `.apk` al dispositivo:**
+   - **Descarga directa:** Si usaste EAS, abre el enlace o escanea el QR desde el navegador del dispositivo para descargarlo directamente.
+   - **Vía cable USB:** Conecta el dispositivo a tu PC y copia el archivo `app-release.apk` a la carpeta `Download` o almacenamiento interno.
+   - **Nube o mensajería:** Envíalo mediante Google Drive, Telegram o correo electrónico a tu dispositivo.
+
+3. **Instalar la aplicación:**
+   - Abre la aplicación de **Archivos** o gestor de descargas en el teléfono.
+   - Localiza y presiona sobre el archivo `.apk`.
+   - Confirma la instalación tocando en **Instalar**.
+   - *(Opcional)* Si Google Play Protect muestra una advertencia de aplicación externa o no verificada, presiona en **Más detalles** y luego en **Instalar de todas formas**.
+   - ¡Listo! Abre **Avedex** y comienza a explorar e identificar avifauna.
+
+---
+
+## 📄 9. Licencia
 
 Este proyecto está distribuido bajo la licencia **MIT**. Para más detalles, consulta el archivo [`Avedex/LICENSE`](Avedex/LICENSE).
